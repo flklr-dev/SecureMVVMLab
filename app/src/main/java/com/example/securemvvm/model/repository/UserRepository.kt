@@ -5,6 +5,7 @@ import com.example.securemvvm.network.ApiService
 import com.example.securemvvm.model.security.SecureStorageManager
 import com.example.securemvvm.model.database.EncryptedDatabaseManager
 import com.example.securemvvm.model.security.TwoFactorAuthManager
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 import android.graphics.Bitmap
@@ -24,7 +25,7 @@ class UserRepository @Inject constructor(
     private val databaseManager: EncryptedDatabaseManager,
     private val twoFactorAuthManager: TwoFactorAuthManager,
     private val userPreferencesRepository: UserPreferencesRepository,
-    private val context: Context
+    @ApplicationContext private val context: Context
 ) {
     companion object {
         private const val KEY_AUTH_TOKEN = "auth_token"
@@ -102,7 +103,7 @@ class UserRepository @Inject constructor(
                 } else {
                     cursor.close()
                     Log.w(TAG, "Login failed: Invalid credentials for user: $email")
-                    Result.failure(Exception("Invalid email or password. Please check your credentials and try again."))
+                    Result.failure(InvalidCredentialsException("Invalid email or password. Please check your credentials and try again."))
                 }
             }
         } catch (e: Exception) {
@@ -301,10 +302,13 @@ class UserRepository @Inject constructor(
     }
 
     fun saveSessionToken(token: String) {
+        Log.d(TAG, "Saving session token: $token")
         sharedPreferences.edit().putString("session_token", token).apply()
     }
 
     fun getSessionToken(): String? {
+        val token = sharedPreferences.getString("session_token", null)
+        Log.d(TAG, "Retrieved session token: $token")
         return sharedPreferences.getString("session_token", null)
     }
 

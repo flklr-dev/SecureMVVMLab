@@ -10,9 +10,10 @@ import androidx.navigation.navArgument
 import com.example.securemvvm.ui.login.LoginScreen
 import com.example.securemvvm.ui.registration.RegistrationScreen
 import com.example.securemvvm.ui.home.HomeScreen
+import androidx.fragment.app.FragmentActivity
 
 @Composable
-fun NavGraph(navController: NavHostController) {
+fun NavGraph(navController: NavHostController, activity: FragmentActivity) {
     NavHost(
         navController = navController,
         startDestination = Screen.Login.route
@@ -27,7 +28,8 @@ fun NavGraph(navController: NavHostController) {
                     navController.navigate(Screen.Home.createRoute(email)) {
                         popUpTo(Screen.Login.route) { inclusive = true }
                     }
-                }
+                },
+                activity = activity
             )
         }
 
@@ -51,7 +53,7 @@ fun NavGraph(navController: NavHostController) {
         ) { backStackEntry ->
             val email = backStackEntry.arguments?.getString("email")
             Log.d("NavGraph", "Displaying HomeScreen with email: $email")
-            HomeScreen(email = email)
+            HomeScreen(email = email, navController = navController)
         }
     }
 }

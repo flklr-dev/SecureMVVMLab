@@ -1,6 +1,7 @@
 package com.example.securemvvm.model.security
 
 import android.content.Context
+import android.util.Log
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
@@ -24,21 +25,26 @@ class BiometricHelper @Inject constructor() {
         
         val callback = object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                super.onAuthenticationSucceeded(result)
+                Log.d("BiometricHelper", "Authentication succeeded")
                 onSuccess()
             }
 
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                super.onAuthenticationError(errorCode, errString)
+                Log.d("BiometricHelper", "Authentication error: $errString")
                 onError(errString.toString())
+            }
+
+            override fun onAuthenticationFailed() {
+                Log.d("BiometricHelper", "Authentication failed")
+                onError("Authentication failed")
             }
         }
 
         val biometricPrompt = BiometricPrompt(activity, executor, callback)
         val promptInfo = BiometricPrompt.PromptInfo.Builder()
-            .setTitle("Biometric Authentication")
+            .setTitle("Biometric login")
             .setSubtitle("Log in using your biometric credential")
-            .setNegativeButtonText("Cancel")
+            .setNegativeButtonText("Use account password")
             .build()
 
         biometricPrompt.authenticate(promptInfo)

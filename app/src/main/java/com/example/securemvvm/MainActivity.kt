@@ -1,7 +1,7 @@
 package com.example.securemvvm
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
@@ -14,24 +14,24 @@ import com.example.securemvvm.ui.theme.SecureMVVMTheme
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            App()
+            App(this)
         }
     }
 }
 
 @Composable
-fun App() {
+fun App(activity: FragmentActivity) {
     SecureMVVMTheme {
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
             val navController = rememberNavController()
-            NavGraph(navController = navController)
+            NavGraph(navController = navController, activity = activity)
         }
     }
 }

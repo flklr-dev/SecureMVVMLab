@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.securemvvm.model.repository.UserRepository
 import com.example.securemvvm.model.repository.UserPreferencesRepository
+import com.example.securemvvm.model.repository.InvalidCredentialsException
 import com.example.securemvvm.viewmodel.utils.ValidationUtils
 import com.example.securemvvm.model.User
 import com.example.securemvvm.model.security.BiometricHelper
@@ -49,14 +50,26 @@ class LoginViewModel @Inject constructor(
         _password.value = value
     }
 
-    fun login() {
+    fun login(activity: FragmentActivity, onSuccess: () -> Unit) {
         viewModelScope.launch {
             _loginState.value = LoginState.Loading
             try {
                 userRepository.login(email, password)
                     .onSuccess { user ->
-                        userRepository.saveSessionToken(user.authToken) // Save session token
-                        _loginState.value = LoginState.Success(user)
+                        // Save user data first
+                        saveUserData(user)
+                        // Then proceed with biometric authentication as second factor
+                        biometricHelper.showBiometricPrompt(
+                            activity,
+                            onSuccess = {
+                                _loginState.value = LoginState.Success(user)
+                                onSuccess()
+                            },
+                            onError = { error ->
+                                _loginState.value = LoginState.Error("Fingerprint verification failed. Please try again.")
+                                clearUserData() // Clear saved data if biometric auth fails
+                            }
+                        )
                     }
                     .onFailure { throwable ->
                         _loginState.value = LoginState.Error(getSafeErrorMessage(throwable))
@@ -80,27 +93,12 @@ class LoginViewModel @Inject constructor(
         return biometricHelper.canAuthenticate(context)
     }
 
-    fun authenticateWithBiometric(activity: FragmentActivity, onSuccess: () -> Unit) {
-        biometricHelper.showBiometricPrompt(activity, {
-            val token = userRepository.getSessionToken()
-            if (token != null) {
-                // Assuming you have a method to retrieve user info based on the token
-                val user = userPreferencesRepository.getUserByToken(token)
-                _loginState.value = LoginState.Success(user)
-                onSuccess()
-            } else {
-                _loginState.value = LoginState.Error("No session found")
-            }
-        }, { error ->
-            _loginState.value = LoginState.Error("Biometric authentication failed: $error")
-        })
-    }
-
     private fun getSafeErrorMessage(throwable: Throwable): String {
         return when (throwable) {
             is SecurityException -> "Security validation failed"
             is IllegalArgumentException -> "Invalid input provided"
-            else -> "Unknown error occurred"
+            is InvalidCredentialsException -> "Invalid email or password. Please try again."
+            else -> "An unexpected error occurred. Please try again later."
         }
     }
 

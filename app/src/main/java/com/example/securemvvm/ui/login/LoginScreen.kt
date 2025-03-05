@@ -24,13 +24,15 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.fragment.app.FragmentActivity
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(
     viewModel: LoginViewModel = hiltViewModel(),
     onNavigateToRegister: () -> Unit,
-    onLoginSuccess: (String) -> Unit
+    onLoginSuccess: (String) -> Unit,
+    activity: FragmentActivity
 ) {
     var passwordVisible by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -93,7 +95,7 @@ fun LoginScreen(
             )
 
             Button(
-                onClick = { viewModel.login() },
+                onClick = { viewModel.login(activity) { onLoginSuccess(viewModel.email) } },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)
@@ -103,13 +105,6 @@ fun LoginScreen(
                 } else {
                     Text("Login")
                 }
-            }
-
-            Button(
-                onClick = { viewModel.authenticateWithBiometric(activity, onLoginSuccess) },
-                modifier = Modifier.fillMaxWidth().height(50.dp).padding(top = 16.dp)
-            ) {
-                Text("Login with Fingerprint")
             }
 
             TextButton(
@@ -125,7 +120,6 @@ fun LoginScreen(
         when (loginState) {
             is LoginState.Success -> {
                 snackbarHostState.showSnackbar("Login successful!")
-                delay(1000)
                 onLoginSuccess(viewModel.email)
             }
             is LoginState.Error -> {

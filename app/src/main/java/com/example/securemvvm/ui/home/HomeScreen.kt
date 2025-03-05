@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -20,10 +21,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavController
+import com.example.securemvvm.viewmodel.HomeViewModel
 
 @Composable
 fun HomeScreen(
-    email: String? = null
+    email: String? = null,
+    navController: NavController,
+    viewModel: HomeViewModel = hiltViewModel()
 ) {
     Box(
         modifier = Modifier
@@ -83,6 +89,18 @@ fun HomeScreen(
                         textAlign = TextAlign.Center
                     )
                 }
+            }
+
+            Button(
+                onClick = {
+                    viewModel.logout()
+                    navController.navigate("login") {
+                        popUpTo("home/{email}") { inclusive = true }
+                    }
+                },
+                modifier = Modifier.padding(top = 24.dp)
+            ) {
+                Text("Logout")
             }
         }
     }
