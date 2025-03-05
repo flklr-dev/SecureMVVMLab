@@ -13,6 +13,9 @@ import kotlinx.coroutines.withContext
 import android.content.ContentValues
 import android.util.Log
 import java.util.UUID
+import android.content.Context
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 
 @Singleton
 class UserRepository @Inject constructor(
@@ -20,11 +23,26 @@ class UserRepository @Inject constructor(
     private val secureStorageManager: SecureStorageManager,
     private val databaseManager: EncryptedDatabaseManager,
     private val twoFactorAuthManager: TwoFactorAuthManager,
-    private val userPreferencesRepository: UserPreferencesRepository
+    private val userPreferencesRepository: UserPreferencesRepository,
+    private val context: Context
 ) {
     companion object {
         private const val KEY_AUTH_TOKEN = "auth_token"
         private const val TAG = "UserRepository"
+    }
+
+    private val sharedPreferences by lazy {
+        val masterKey = MasterKey.Builder(context)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+
+        EncryptedSharedPreferences.create(
+            context,
+            "secure_prefs",
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
     }
 
     suspend fun login(email: String, password: String): Result<User> = withContext(Dispatchers.IO) {
@@ -280,5 +298,17 @@ class UserRepository @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "Error reading users", e)
         }
+    }
+
+    fun saveSessionToken(token: String) {
+        sharedPreferences.edit().putString("session_token", token).apply()
+    }
+
+    fun getSessionToken(): String? {
+        return sharedPreferences.getString("session_token", null)
+    }
+
+    fun clearSessionToken() {
+        sharedPreferences.edit().remove("session_token").apply()
     }
 } 

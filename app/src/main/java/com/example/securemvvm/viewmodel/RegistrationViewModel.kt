@@ -90,10 +90,13 @@ class RegistrationViewModel @Inject constructor(
                         _registrationState.value = RegistrationState.Success
                         Log.i(TAG, "Registration successful")
                     }
-                    .onFailure {
-                        val safeErrorMessage = "Registration failed: ${getSafeErrorMessage(it)}"
-                        _registrationState.value = RegistrationState.Error(safeErrorMessage)
-                        Log.e(TAG, safeErrorMessage)
+                    .onFailure { throwable ->
+                        val errorMessage = when (throwable) {
+                            is IllegalArgumentException -> "This email is already registered. Please use a different email."
+                            else -> "Registration failed: ${getSafeErrorMessage(throwable)}"
+                        }
+                        _registrationState.value = RegistrationState.Error(errorMessage)
+                        Log.e(TAG, errorMessage)
                     }
             } catch (e: Exception) {
                 val safeErrorMessage = "An unexpected error occurred"

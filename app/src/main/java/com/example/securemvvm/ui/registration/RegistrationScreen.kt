@@ -73,6 +73,11 @@ fun RegistrationScreen(
                         text = "Invalid email format",
                         color = MaterialTheme.colorScheme.error
                     )
+                } else if (registrationState is RegistrationState.Error && (registrationState as RegistrationState.Error).message.contains("Email already registered")) {
+                    Text(
+                        text = "Email already registered",
+                        color = MaterialTheme.colorScheme.error
+                    )
                 }
             },
             modifier = Modifier

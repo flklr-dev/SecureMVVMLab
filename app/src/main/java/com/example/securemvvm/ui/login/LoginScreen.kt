@@ -98,10 +98,18 @@ fun LoginScreen(
                     .fillMaxWidth()
                     .height(50.dp)
             ) {
-                when (loginState) {
-                    is LoginState.Loading -> CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary)
-                    else -> Text("Login")
+                if (loginState is LoginState.Loading) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary)
+                } else {
+                    Text("Login")
                 }
+            }
+
+            Button(
+                onClick = { viewModel.authenticateWithBiometric(activity, onLoginSuccess) },
+                modifier = Modifier.fillMaxWidth().height(50.dp).padding(top = 16.dp)
+            ) {
+                Text("Login with Fingerprint")
             }
 
             TextButton(

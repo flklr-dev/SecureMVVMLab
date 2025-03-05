@@ -53,10 +53,9 @@ class LoginViewModel @Inject constructor(
         viewModelScope.launch {
             _loginState.value = LoginState.Loading
             try {
-                userRepository.debugPrintUsers()
-                
                 userRepository.login(email, password)
                     .onSuccess { user ->
+                        userRepository.saveSessionToken(user.authToken) // Save session token
                         _loginState.value = LoginState.Success(user)
                     }
                     .onFailure { throwable ->
@@ -81,44 +80,20 @@ class LoginViewModel @Inject constructor(
         return biometricHelper.canAuthenticate(context)
     }
 
-    fun authenticateWithBiometric(
-        activity: FragmentActivity,
-        onSuccess: () -> Unit
-    ) {
-        biometricHelper.showBiometricPrompt(
-            activity,
-            onSuccess = {
-                viewModelScope.launch {
-                    try {
-                        val authToken = userRepository.getStoredAuthToken()
-                        val userId = userPreferencesRepository.getUserId()
-                        
-                        if (userId != null) {
-                            val user = User(
-                                id = userId,
-                                username = userPreferencesRepository.getUserEmail()?.substringBefore('@') ?: "",
-                                email = userPreferencesRepository.getUserEmail() ?: "",
-                                authToken = authToken
-                            )
-                            _loginState.value = LoginState.Success(user)
-                            Log.i(TAG, "Biometric authentication successful for user ID: $userId") // Log only ID
-                            onSuccess()
-                        } else {
-                            _loginState.value = LoginState.Error("No stored user credentials found")
-                            Log.w(TAG, "Biometric auth failed: No stored credentials") // Safe to log
-                        }
-                    } catch (e: Exception) {
-                        val safeErrorMessage = "Biometric authentication failed"
-                        _loginState.value = LoginState.Error(safeErrorMessage)
-                        Log.e(TAG, "$safeErrorMessage: ${getSafeErrorMessage(e)}") // Safe error logging
-                    }
-                }
-            },
-            onError = { error ->
-                _loginState.value = LoginState.Error("Biometric authentication failed")
-                Log.e(TAG, "Biometric auth error: $error") // Generic error message
+    fun authenticateWithBiometric(activity: FragmentActivity, onSuccess: () -> Unit) {
+        biometricHelper.showBiometricPrompt(activity, {
+            val token = userRepository.getSessionToken()
+            if (token != null) {
+                // Assuming you have a method to retrieve user info based on the token
+                val user = userPreferencesRepository.getUserByToken(token)
+                _loginState.value = LoginState.Success(user)
+                onSuccess()
+            } else {
+                _loginState.value = LoginState.Error("No session found")
             }
-        )
+        }, { error ->
+            _loginState.value = LoginState.Error("Biometric authentication failed: $error")
+        })
     }
 
     private fun getSafeErrorMessage(throwable: Throwable): String {
