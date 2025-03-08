@@ -5,6 +5,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,6 +33,11 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.ui.focus.onFocusEvent
+import androidx.compose.ui.graphics.Color
+
+private object BiometricState {
+    var hasPromptedThisSession = false
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,7 +57,6 @@ fun LoginScreen(
     var showOtpDialog by remember { mutableStateOf(false) }
     var remainingTime by remember { mutableStateOf(0L) }
     var canResend by remember { mutableStateOf(false) }
-    var showPasswordInput by remember { mutableStateOf(false) }
     var showSuccessDialog by remember { mutableStateOf(false) }
     var showFullLoginForm by remember { mutableStateOf(false) }
     var emailError by remember { mutableStateOf<String?>(null) }
@@ -59,6 +64,23 @@ fun LoginScreen(
     
     val lastLoggedInEmail = viewModel.email
     val hasStoredCredentials = viewModel.hasStoredCredentials()
+
+    // Modified LaunchedEffect for biometric login
+    LaunchedEffect(key1 = Unit) {
+        if (hasStoredCredentials && !showFullLoginForm && !BiometricState.hasPromptedThisSession) {
+            // Set the flag to true immediately to prevent any possibility of multiple prompts
+            BiometricState.hasPromptedThisSession = true
+            
+            biometricHelper.showBiometricPrompt(
+                activity,
+                onSuccess = {
+                    viewModel.updatePassword("")
+                    viewModel.loginWithBiometric { onLoginSuccess(lastLoggedInEmail) }
+                },
+                onError = { /* Silently fail, let user use password */ }
+            )
+        }
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) }
@@ -78,7 +100,7 @@ fun LoginScreen(
             )
             if (!hasStoredCredentials || showFullLoginForm) {
                 OutlinedTextField(
-                    value = viewModel.email,
+                    value = if (showFullLoginForm) "" else viewModel.email,
                     onValueChange = { newValue -> 
                         viewModel.updateEmail(newValue)
                         emailError = null 
@@ -172,83 +194,120 @@ fun LoginScreen(
                     Text("Don't have an account? Register")
                 }
             } else {
-                // Quick login options
-                Text(
-                    text = "Continue as $lastLoggedInEmail",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-
-                Button(
-                    onClick = {
-                        biometricHelper.showBiometricPrompt(
-                            activity,
-                            onSuccess = {
-                                viewModel.loginWithBiometric { onLoginSuccess(lastLoggedInEmail) }
-                            },
-                            onError = { showErrorDialog = true }
-                        )
-                    },
-                    modifier = Modifier.fillMaxWidth()
+                // Redesigned Quick Login UI
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color.White // Set pure white background
+                    )
                 ) {
-                    Text("Login with Fingerprint")
-                }
-
-                Text(
-                    text = "or",
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
-
-                Button(
-                    onClick = { showPasswordInput = true },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Login with Password")
-                }
-
-                TextButton(
-                    onClick = { 
-                        showFullLoginForm = true
-                        viewModel.clearStoredCredentials()
-                    },
-                    modifier = Modifier.padding(top = 16.dp)
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Icon(
-                            imageVector = Icons.Default.SwapHoriz,
-                            contentDescription = "Switch Account",
-                            modifier = Modifier.padding(end = 8.dp)
+                            imageVector = Icons.Default.Person,
+                            contentDescription = "User Account",
+                            modifier = Modifier.size(64.dp),
+                            tint = MaterialTheme.colorScheme.primary
                         )
-                        Text("Switch Account")
+                        
+                        Text(
+                            text = "Continue as",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                        )
+                        
+                        Text(
+                            text = lastLoggedInEmail,
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+                        
+                        OutlinedTextField(
+                            value = viewModel.password,
+                            onValueChange = { newValue -> 
+                                viewModel.updatePassword(newValue)
+                                passwordError = null
+                            },
+                            label = { Text("Password") },
+                            visualTransformation = if (passwordVisible) 
+                                VisualTransformation.None 
+                            else 
+                                PasswordVisualTransformation(),
+                            modifier = Modifier
+                                .fillMaxWidth(),
+                            isError = passwordError != null,
+                            supportingText = if (passwordError != null) {
+                                { Text(text = passwordError!!, color = MaterialTheme.colorScheme.error) }
+                            } else null,
+                            trailingIcon = {
+                                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                    Icon(
+                                        imageVector = if (passwordVisible) 
+                                            Icons.Default.VisibilityOff 
+                                        else 
+                                            Icons.Default.Visibility,
+                                        contentDescription = if (passwordVisible) 
+                                            "Hide password" 
+                                        else 
+                                            "Show password"
+                                    )
+                                }
+                            },
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                imeAction = ImeAction.Done
+                            )
+                        )
+                        
+                        Button(
+                            onClick = {
+                                if (viewModel.password.isBlank()) {
+                                    passwordError = "Password is required"
+                                } else {
+                                    // Quick login doesn't need OTP
+                                    viewModel.quickLogin(activity) { 
+                                        onLoginSuccess(lastLoggedInEmail)
+                                    }
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 16.dp)
+                        ) {
+                            Text("Login")
+                        }
+                        
+                        TextButton(
+                            onClick = { 
+                                showFullLoginForm = true
+                                viewModel.clearStoredCredentials()
+                                viewModel.updateEmail("")
+                            },
+                            modifier = Modifier.padding(top = 8.dp)
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.SwapHoriz,
+                                    contentDescription = "Switch Account",
+                                    modifier = Modifier.padding(end = 8.dp)
+                                )
+                                Text("Use different account")
+                            }
+                        }
                     }
                 }
             }
         }
-    }
-
-    if (showPasswordInput) {
-        PasswordDialog(
-            onDismiss = { 
-                showPasswordInput = false
-                viewModel.updatePassword("")
-            },
-            onSubmit = {
-                // Quick login doesn't need OTP
-                viewModel.quickLogin(activity) { 
-                    onLoginSuccess(lastLoggedInEmail)
-                    showPasswordInput = false
-                }
-            },
-            viewModel = viewModel,
-            passwordVisible = passwordVisible,
-            onPasswordVisibilityChange = { passwordVisible = it },
-            errorMessage = if (loginState is LoginState.Error) 
-                (loginState as LoginState.Error).message 
-            else null
-        )
     }
 
     // Handle OTP Dialog
@@ -271,9 +330,12 @@ fun LoginScreen(
     // Handle login state changes
     LaunchedEffect(loginState) {
         when (loginState) {
+            is LoginState.Initial -> {
+                // isFirstLaunch = true
+            }
             is LoginState.Success -> {
                 showSuccessDialog = true
-                delay(1000) // Reduced from 1500ms to 1000ms
+                delay(1000)
                 showSuccessDialog = false
                 onLoginSuccess(viewModel.email)
             }
@@ -283,7 +345,7 @@ fun LoginScreen(
             }
             is LoginState.OTPRequired -> {
                 showOtpDialog = true
-                remainingTime = 120000L // 2 minutes
+                remainingTime = 120000L
             }
             else -> {}
         }

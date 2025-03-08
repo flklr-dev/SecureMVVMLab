@@ -49,6 +49,10 @@ class LoginViewModel @Inject constructor(
     private val _passwordError = MutableStateFlow("")
     val passwordError: StateFlow<String> = _passwordError.asStateFlow()
 
+    private var _hasBiometricBeenPrompted = false
+    val hasBiometricBeenPrompted: Boolean
+        get() = _hasBiometricBeenPrompted
+
     fun updateEmail(value: String) {
         _email.value = value.trim()
     }
@@ -246,6 +250,10 @@ class LoginViewModel @Inject constructor(
                 _loginState.value = LoginState.Error(getSafeErrorMessage(e))
             }
         }
+    }
+
+    fun setBiometricPrompted() {
+        _hasBiometricBeenPrompted = true
     }
 }
 
