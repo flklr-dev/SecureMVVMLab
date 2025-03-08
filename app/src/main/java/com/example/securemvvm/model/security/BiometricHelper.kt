@@ -30,13 +30,21 @@ class BiometricHelper @Inject constructor() {
             }
 
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                Log.d("BiometricHelper", "Authentication error: $errString")
-                onError(errString.toString())
+                Log.d("BiometricHelper", "Authentication error code: $errorCode, message: $errString")
+                when (errorCode) {
+                    BiometricPrompt.ERROR_NO_BIOMETRICS -> 
+                        onError("No biometric features enrolled on this device")
+                    BiometricPrompt.ERROR_HW_UNAVAILABLE -> 
+                        onError("Biometric features are currently unavailable")
+                    BiometricPrompt.ERROR_LOCKOUT -> 
+                        onError("Too many attempts. Please try again later")
+                    else -> onError(errString.toString())
+                }
             }
 
             override fun onAuthenticationFailed() {
                 Log.d("BiometricHelper", "Authentication failed")
-                onError("Authentication failed")
+                onError("Biometric authentication failed")
             }
         }
 
@@ -44,7 +52,7 @@ class BiometricHelper @Inject constructor() {
         val promptInfo = BiometricPrompt.PromptInfo.Builder()
             .setTitle("Biometric login")
             .setSubtitle("Log in using your biometric credential")
-            .setNegativeButtonText("Use account password")
+            .setNegativeButtonText("Cancel")
             .build()
 
         biometricPrompt.authenticate(promptInfo)

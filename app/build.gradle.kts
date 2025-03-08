@@ -57,6 +57,25 @@ android {
             isReturnDefaultValues = true
         }
     }
+
+    packaging {
+        resources {
+            excludes += listOf(
+                "META-INF/LICENSE.md",
+                "META-INF/LICENSE-notice.md",
+                "META-INF/NOTICE.md",
+                "META-INF/DEPENDENCIES",
+                "META-INF/LICENSE",
+                "META-INF/LICENSE.txt",
+                "META-INF/NOTICE",
+                "META-INF/NOTICE.txt",
+                "META-INF/*.kotlin_module",
+                "META-INF/NOTICE.md",
+                "META-INF/mailcap",
+                "META-INF/mimetypes.default"
+            )
+        }
+    }
 }
 
 dependencies {
@@ -132,6 +151,17 @@ dependencies {
     implementation("androidx.compose.material:material-icons-core:1.6.1")
     implementation("androidx.compose.foundation:foundation:1.6.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+
+    // Add these instead
+    implementation("com.google.android.gms:play-services-auth:20.7.0")
+    implementation("com.google.api-client:google-api-client-android:2.2.0")
+    implementation("com.google.apis:google-api-services-gmail:v1-rev20220404-2.0.0")
+    implementation("com.google.oauth-client:google-oauth-client-jetty:1.34.1")
+    implementation("com.google.auth:google-auth-library-oauth2-http:1.20.0")
+
+    // Add these for email functionality
+    implementation("com.sun.mail:android-mail:1.6.7")
+    implementation("com.sun.mail:android-activation:1.6.7")
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {

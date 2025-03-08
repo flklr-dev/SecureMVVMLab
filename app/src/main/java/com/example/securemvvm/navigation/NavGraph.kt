@@ -11,25 +11,26 @@ import com.example.securemvvm.ui.login.LoginScreen
 import com.example.securemvvm.ui.registration.RegistrationScreen
 import com.example.securemvvm.ui.home.HomeScreen
 import androidx.fragment.app.FragmentActivity
+import com.example.securemvvm.model.security.BiometricHelper
 
 @Composable
 fun NavGraph(navController: NavHostController, activity: FragmentActivity) {
+    val biometricHelper = BiometricHelper()
+
     NavHost(
         navController = navController,
         startDestination = Screen.Login.route
     ) {
         composable(Screen.Login.route) {
             LoginScreen(
-                onNavigateToRegister = {
-                    navController.navigate(Screen.Register.route)
-                },
+                onNavigateToRegister = { navController.navigate(Screen.Register.route) },
                 onLoginSuccess = { email ->
-                    Log.d("NavGraph", "Login success, navigating to home with email: $email")
                     navController.navigate(Screen.Home.createRoute(email)) {
                         popUpTo(Screen.Login.route) { inclusive = true }
                     }
                 },
-                activity = activity
+                activity = activity,
+                biometricHelper = biometricHelper
             )
         }
 
@@ -53,15 +54,7 @@ fun NavGraph(navController: NavHostController, activity: FragmentActivity) {
         ) { backStackEntry ->
             val email = backStackEntry.arguments?.getString("email")
             Log.d("NavGraph", "Displaying HomeScreen with email: $email")
-            HomeScreen(email = email, navController = navController)
+            HomeScreen(email = email, navController = navController, activity = activity, biometricHelper = biometricHelper)
         }
     }
 }
-
-sealed class Screen(val route: String) {
-    data object Login : Screen("login")
-    data object Register : Screen("register")
-    data object Home : Screen("home/{email}") {
-        fun createRoute(email: String) = "home/$email"
-    }
-}  

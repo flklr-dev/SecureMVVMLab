@@ -24,7 +24,6 @@ class EncryptedDatabaseManager @Inject constructor(
                     id TEXT PRIMARY KEY,
                     email TEXT NOT NULL UNIQUE,
                     password_hash TEXT NOT NULL,
-                    two_factor_secret TEXT,
                     created_at INTEGER NOT NULL,
                     updated_at INTEGER NOT NULL
                 )

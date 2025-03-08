@@ -13,6 +13,7 @@ class UserPreferencesRepository @Inject constructor(
         private const val KEY_USER_ID = "user_id"
         private const val KEY_USER_EMAIL = "user_email"
         private const val KEY_USER_SETTINGS = "user_settings"
+        private const val KEY_LAST_LOGGED_IN_EMAIL = "last_logged_in_email"
     }
 
     fun saveUserId(userId: String) {
@@ -68,5 +69,13 @@ class UserPreferencesRepository @Inject constructor(
     private fun queryUserFromDatabase(userId: String): User? {
         // Implement your database query logic here
         return null // Replace with actual user retrieval logic
+    }
+
+    fun saveLastLoggedInEmail(email: String) {
+        secureStorageManager.saveSecureString(KEY_LAST_LOGGED_IN_EMAIL, email)
+    }
+
+    fun getLastLoggedInEmail(): String? {
+        return secureStorageManager.getSecureString(KEY_LAST_LOGGED_IN_EMAIL)
     }
 } 

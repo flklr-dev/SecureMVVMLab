@@ -5,6 +5,7 @@ import com.example.securemvvm.network.ApiService
 import com.example.securemvvm.model.security.SecureStorageManager
 import com.example.securemvvm.model.database.EncryptedDatabaseManager
 import com.example.securemvvm.model.security.TwoFactorAuthManager
+import com.example.securemvvm.model.security.EmailService
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -45,6 +46,9 @@ class UserRepository @Inject constructor(
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
     }
+
+    private var otp: String? = null
+    private var otpRequestTime: Long = 0
 
     suspend fun login(email: String, password: String): Result<User> = withContext(Dispatchers.IO) {
         try {
@@ -122,73 +126,28 @@ class UserRepository @Inject constructor(
         }
     }
 
-    suspend fun registerUser(email: String, password: String): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun registerUser(email: String, password: String): Result<Boolean> = withContext(Dispatchers.IO) {
         try {
             val passwordHash = hashPassword(password)
-            Log.d(TAG, "Attempting to register user - Email: $email, Hash: $passwordHash")
-            
             val db = databaseManager.getWritableEncryptedDatabase()
-            
-            db.use { database ->
-                // Check if user already exists
-                val cursor = database.rawQuery(
-                    "SELECT COUNT(*) FROM users WHERE email = ?",
-                    arrayOf(email)
-                )
-                
-                cursor.use {
-                    it.moveToFirst()
-                    if (it.getInt(0) > 0) {
-                        Log.d(TAG, "User already exists with email: $email")
-                        return@withContext Result.failure(IllegalArgumentException("Email already registered"))
-                    }
-                }
 
-                // Generate user ID and 2FA secret
-                val userId = UUID.randomUUID().toString()
-                val twoFactorSecret = twoFactorAuthManager.generateSecretKey()
-                
-                // Insert new user
-                val values = ContentValues().apply {
-                    put("id", userId)
+            db.use { database ->
+                val contentValues = ContentValues().apply {
                     put("email", email)
                     put("password_hash", passwordHash)
-                    put("two_factor_secret", twoFactorSecret)
                     put("created_at", System.currentTimeMillis())
                     put("updated_at", System.currentTimeMillis())
                 }
-                
-                val newRowId = database.insert("users", null, values)
-                
-                if (newRowId == -1L) {
+                val result = database.insert("users", null, contentValues)
+                if (result == -1L) {
                     Log.e(TAG, "Failed to insert new user into database")
-                    return@withContext Result.failure(Exception("Failed to create user"))
+                    return@withContext Result.failure(Exception("Failed to register user"))
                 }
-                
-                // Verify the user was created
-                val verificationCursor = database.rawQuery(
-                    "SELECT * FROM users WHERE id = ?",
-                    arrayOf(userId)
-                )
-                
-                if (verificationCursor.moveToFirst()) {
-                    Log.d(TAG, "Successfully created user with ID: $userId")
-                    verificationCursor.close()
-                } else {
-                    Log.e(TAG, "User verification failed after insert")
-                    verificationCursor.close()
-                    return@withContext Result.failure(Exception("Failed to verify user creation"))
-                }
-                
-                // Store user preferences
-                userPreferencesRepository.saveUserId(userId)
-                userPreferencesRepository.saveUserEmail(email)
-                
-                Result.success(Unit)
+                return@withContext Result.success(true)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Registration failed", e)
-            Result.failure(e)
+            return@withContext Result.failure(e)
         }
     }
 
@@ -196,7 +155,7 @@ class UserRepository @Inject constructor(
         try {
             val passwordHash = hashPassword(password)
             val db = databaseManager.getReadableEncryptedDatabase()
-            
+
             db.use { database ->
                 val cursor = database.rawQuery(
                     "SELECT COUNT(*) FROM users WHERE email = ? AND password_hash = ?",
@@ -205,11 +164,16 @@ class UserRepository @Inject constructor(
                 cursor.use {
                     it.moveToFirst()
                     val exists = it.getInt(0) > 0
-                    Result.success(exists)
+                    return@withContext if (exists) {
+                        Result.success(true)
+                    } else {
+                        Result.failure(Exception("No user found with email"))
+                    }
                 }
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            Log.e(TAG, "Login failed", e)
+            return@withContext Result.failure(e)
         }
     }
 
@@ -314,5 +278,36 @@ class UserRepository @Inject constructor(
 
     fun clearSessionToken() {
         sharedPreferences.edit().remove("session_token").apply()
+    }
+
+    suspend fun sendOTP(email: String): Result<Boolean> = withContext(Dispatchers.IO) {
+        if (System.currentTimeMillis() - otpRequestTime < 5 * 60 * 1000) {
+            return@withContext Result.failure(Exception("Please wait before requesting a new OTP"))
+        }
+        otp = generateOTP() // Implement this method to generate a random OTP
+        otpRequestTime = System.currentTimeMillis()
+        
+        // Send OTP via EmailService
+        val emailService = EmailService(context)
+        return@withContext try {
+            emailService.sendOTPEmail(email, otp!!).let { success ->
+                if (success) {
+                    Result.success(true)
+                } else {
+                    Result.failure(Exception("Failed to send OTP"))
+                }
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    fun verifyOTP(inputOtp: String): Boolean {
+        return otp == inputOtp
+    }
+
+    private fun generateOTP(): String {
+        // Generate a 6-digit OTP
+        return (100000..999999).random().toString()
     }
 } 
