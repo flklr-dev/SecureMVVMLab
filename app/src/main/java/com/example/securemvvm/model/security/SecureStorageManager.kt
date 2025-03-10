@@ -14,6 +14,7 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 import javax.inject.Inject
 import javax.inject.Singleton
+import android.util.Log
 
 @Singleton
 class SecureStorageManager @Inject constructor(
@@ -71,23 +72,34 @@ class SecureStorageManager @Inject constructor(
     }
 
     fun storePassword(password: String) {
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        val secretKey = keyStore.getKey(keyAlias, null) as SecretKey
-        cipher.init(Cipher.ENCRYPT_MODE, secretKey)
+        try {
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            val secretKey = keyStore.getKey(keyAlias, null) as SecretKey
+            cipher.init(Cipher.ENCRYPT_MODE, secretKey)
 
-        val encrypted = cipher.doFinal(password.toByteArray())
-        val iv = cipher.iv
+            val encrypted = cipher.doFinal(password.toByteArray())
+            val iv = cipher.iv
 
-        // Store both the IV and encrypted data
-        sharedPrefs.edit()
-            .putString("stored_password", Base64.encodeToString(encrypted, Base64.DEFAULT))
-            .putString("stored_password_iv", Base64.encodeToString(iv, Base64.DEFAULT))
-            .apply()
+            // Store both the IV and encrypted data
+            sharedPrefs.edit()
+                .putString("stored_password", Base64.encodeToString(encrypted, Base64.DEFAULT))
+                .putString("stored_password_iv", Base64.encodeToString(iv, Base64.DEFAULT))
+                .apply()
+            
+            Log.d("SecureStorageManager", "Password stored successfully")
+        } catch (e: Exception) {
+            Log.e("SecureStorageManager", "Error storing password", e)
+        }
     }
 
     fun getStoredPassword(): String? {
-        val encryptedPassword = sharedPrefs.getString("stored_password", null) ?: return null
-        val iv = sharedPrefs.getString("stored_password_iv", null) ?: return null
+        val encryptedPassword = sharedPrefs.getString("stored_password", null)
+        val iv = sharedPrefs.getString("stored_password_iv", null)
+        
+        if (encryptedPassword == null || iv == null) {
+            Log.d("SecureStorageManager", "No stored password found")
+            return null
+        }
 
         try {
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
@@ -97,9 +109,11 @@ class SecureStorageManager @Inject constructor(
             cipher.init(Cipher.DECRYPT_MODE, secretKey, ivSpec)
             val decrypted = cipher.doFinal(Base64.decode(encryptedPassword, Base64.DEFAULT))
             
-            return String(decrypted)
+            val password = String(decrypted)
+            Log.d("SecureStorageManager", "Password retrieved successfully")
+            return password
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("SecureStorageManager", "Error retrieving password", e)
             return null
         }
     }

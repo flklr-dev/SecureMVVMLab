@@ -25,6 +25,7 @@ fun NavGraph(navController: NavHostController, activity: FragmentActivity) {
             LoginScreen(
                 onNavigateToRegister = { navController.navigate(Screen.Register.route) },
                 onLoginSuccess = { email ->
+                    Log.d("NavGraph", "Navigating to home with email: $email")
                     navController.navigate(Screen.Home.createRoute(email)) {
                         popUpTo(Screen.Login.route) { inclusive = true }
                     }

@@ -50,9 +50,25 @@ class UserRepository @Inject constructor(
     private var otp: String? = null
     private var otpRequestTime: Long = 0
 
+    private fun isAlreadyHashed(str: String): Boolean {
+        // A hashed password is typically 64 characters for SHA-256
+        return str.length == 64 && str.all { c -> c.isDigit() || c in 'a'..'f' }
+    }
+
     suspend fun login(email: String, password: String): Result<User> = withContext(Dispatchers.IO) {
         try {
-            val passwordHash = hashPassword(password)
+            if (email.isBlank()) {
+                Log.e(TAG, "Login attempt with blank email")
+                return@withContext Result.failure(InvalidCredentialsException("Email cannot be empty"))
+            }
+            
+            // Check if the password is already hashed (from biometric login)
+            val passwordHash = if (isAlreadyHashed(password)) {
+                password
+            } else {
+                hashPassword(password)
+            }
+            
             Log.d(TAG, "Login attempt - Email: $email, Hash: $passwordHash")
             
             val db = databaseManager.getReadableEncryptedDatabase()

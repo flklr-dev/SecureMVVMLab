@@ -4,6 +4,7 @@ import com.example.securemvvm.model.User
 import com.example.securemvvm.model.security.SecureStorageManager
 import javax.inject.Inject
 import javax.inject.Singleton
+import android.util.Log
 
 @Singleton
 class UserPreferencesRepository @Inject constructor(
@@ -14,6 +15,7 @@ class UserPreferencesRepository @Inject constructor(
         private const val KEY_USER_EMAIL = "user_email"
         private const val KEY_USER_SETTINGS = "user_settings"
         private const val KEY_LAST_LOGGED_IN_EMAIL = "last_logged_in_email"
+        private const val TAG = "UserPreferencesRepo"
     }
 
     fun saveUserId(userId: String) {
@@ -26,6 +28,8 @@ class UserPreferencesRepository @Inject constructor(
 
     fun saveUserEmail(email: String) {
         secureStorageManager.saveSecureString(KEY_USER_EMAIL, email)
+        // Also save as last logged in email
+        saveLastLoggedInEmail(email)
     }
 
     fun getUserEmail(): String? {
@@ -41,41 +45,42 @@ class UserPreferencesRepository @Inject constructor(
     }
 
     fun clearUserPreferences() {
+        Log.d(TAG, "Clearing user preferences")
         listOf(KEY_USER_ID, KEY_USER_EMAIL, KEY_USER_SETTINGS).forEach { key ->
             secureStorageManager.getSecureString(key)?.let {
                 secureStorageManager.saveSecureString(key, "")
             }
         }
+        // Don't clear last logged in email when clearing preferences
     }
 
     fun getUserByToken(token: String): User? {
-        // Implement logic to retrieve user based on the token
-        // For example, you might want to query the database or shared preferences
-        // This is a placeholder; you need to implement the actual retrieval logic
-
-        // Example: Retrieve user data from shared preferences or database
-        val userId = secureStorageManager.getSecureString("user_id") // Assuming you store user ID in secure storage
+        val userId = secureStorageManager.getSecureString("user_id")
         return if (userId != null) {
-            // Query the database to get the user details
-            // Replace with actual database query logic
-            val user = queryUserFromDatabase(userId)
-            user
+            val userEmail = secureStorageManager.getSecureString("user_email")
+            if (userEmail != null) {
+                User(
+                    id = userId,
+                    email = userEmail,
+                    username = userEmail.substringBefore("@"),
+                    authToken = token
+                )
+            } else {
+                null
+            }
         } else {
             null
         }
     }
 
-    // Placeholder function for querying user from the database
-    private fun queryUserFromDatabase(userId: String): User? {
-        // Implement your database query logic here
-        return null // Replace with actual user retrieval logic
-    }
-
     fun saveLastLoggedInEmail(email: String) {
+        Log.d(TAG, "Saving last logged in email: $email")
         secureStorageManager.saveSecureString(KEY_LAST_LOGGED_IN_EMAIL, email)
     }
 
     fun getLastLoggedInEmail(): String? {
-        return secureStorageManager.getSecureString(KEY_LAST_LOGGED_IN_EMAIL)
+        val email = secureStorageManager.getSecureString(KEY_LAST_LOGGED_IN_EMAIL)
+        Log.d(TAG, "Retrieved last logged in email: $email")
+        return email
     }
 } 

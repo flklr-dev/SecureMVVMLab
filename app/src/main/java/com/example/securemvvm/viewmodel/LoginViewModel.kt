@@ -27,7 +27,7 @@ private const val TAG = "LoginViewModel" // For logging
 @HiltViewModel
 class LoginViewModel @Inject constructor(
     private val userRepository: UserRepository,
-    private val userPreferencesRepository: UserPreferencesRepository,
+    private val _userPreferencesRepository: UserPreferencesRepository,
     private val biometricHelper: BiometricHelper,
     private val secureStorageManager: SecureStorageManager
 ) : ViewModel() {
@@ -51,6 +51,9 @@ class LoginViewModel @Inject constructor(
     private var _hasBiometricBeenPrompted = false
     val hasBiometricBeenPrompted: Boolean
         get() = _hasBiometricBeenPrompted
+
+    val userPreferencesRepository: UserPreferencesRepository
+        get() = _userPreferencesRepository
 
     fun updateEmail(newEmail: String) {
         _email.value = newEmail
@@ -86,26 +89,33 @@ class LoginViewModel @Inject constructor(
             _loginState.value = LoginState.Loading
             try {
                 val storedPassword = secureStorageManager.getStoredPassword()
-                val lastEmail = userPreferencesRepository.getLastLoggedInEmail()
+                val lastEmail = _userPreferencesRepository.getLastLoggedInEmail()
                 
                 Log.d(TAG, "Attempting biometric login - Stored password exists: ${storedPassword != null}")
-                Log.d(TAG, "Last email exists: ${lastEmail != null}")
+                Log.d(TAG, "Last email exists: ${lastEmail != null}, Email: $lastEmail")
                 
                 if (storedPassword != null && lastEmail != null) {
-                    _email.value = lastEmail // Set the email before login
-                    _password.value = storedPassword // Set the password before login - This was missing!
+                    // Update the email state flow with the last logged in email
+                    updateEmail(lastEmail)
+                    // Set the password before login
+                    updatePassword(storedPassword)
+                    
+                    Log.d(TAG, "Biometric login with email: ${_email.value} and stored password")
                     
                     userRepository.login(lastEmail, storedPassword)
                         .onSuccess { user ->
-                            Log.d(TAG, "Biometric login successful")
+                            Log.d(TAG, "Biometric login successful for user: $lastEmail")
                             saveUserData(user)
                             _loginState.value = LoginState.Success(user)
-                            onSuccess()
+                            try {
+                                onSuccess()
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Navigation error after successful login", e)
+                                _loginState.value = LoginState.Error("Login successful, but there was a navigation error.")
+                            }
                         }.onFailure { e ->
                             Log.e(TAG, "Biometric login failed", e)
-                            // Clear stored credentials on failure
-                            secureStorageManager.clearStoredPassword()
-                            userPreferencesRepository.clearUserPreferences()
+                            // Don't clear stored credentials on failure - might be temporary issue
                             _loginState.value = LoginState.Error("Biometric authentication failed. Please login with password.")
                         }
                 } else {
@@ -144,8 +154,10 @@ class LoginViewModel @Inject constructor(
 
     private fun saveUserData(user: User) {
         userPreferencesRepository.saveUserId(user.id)
-        userPreferencesRepository.saveUserEmail(email)
+        userPreferencesRepository.saveUserEmail(user.email)
+        userPreferencesRepository.saveLastLoggedInEmail(user.email)
         // Store the password for biometric login
+        Log.d(TAG, "Storing password for biometric login, email: ${user.email}")
         secureStorageManager.storePassword(_password.value)
     }
 
@@ -252,6 +264,18 @@ class LoginViewModel @Inject constructor(
 
     fun setBiometricPrompted() {
         _hasBiometricBeenPrompted = true
+    }
+
+    fun loadLastLoggedInEmail() {
+        viewModelScope.launch {
+            val lastEmail = _userPreferencesRepository.getLastLoggedInEmail()
+            if (lastEmail != null && lastEmail.isNotBlank()) {
+                Log.d(TAG, "Loaded last logged in email: $lastEmail")
+                updateEmail(lastEmail)
+            } else {
+                Log.d(TAG, "No last logged in email found")
+            }
+        }
     }
 }
 

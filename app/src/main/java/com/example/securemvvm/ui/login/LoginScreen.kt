@@ -78,7 +78,9 @@ fun LoginScreen(
                 activity,
                 onSuccess = {
                     viewModel.updatePassword("")
-                    viewModel.loginWithBiometric { onLoginSuccess(lastLoggedInEmail) }
+                    viewModel.loginWithBiometric { 
+                        onLoginSuccess(viewModel.email) 
+                    }
                 },
                 onError = { /* Silently fail, let user use password */ }
             )
@@ -106,6 +108,14 @@ fun LoginScreen(
             viewModel.updateEmail("")
             viewModel.updatePassword("")
         }
+    }
+
+    // Replace the LaunchedEffect that's causing the error
+    LaunchedEffect(Unit) {
+        // Instead of directly accessing the repository, use a method in the ViewModel
+        viewModel.loadLastLoggedInEmail()
+        // The email will be updated in the ViewModel and reflected in the UI
+        emailInput = viewModel.email
     }
 
     Scaffold(
@@ -251,7 +261,7 @@ fun LoginScreen(
                         )
                         
                         Text(
-                            text = lastLoggedInEmail,
+                            text = "${viewModel.email}",
                             style = MaterialTheme.typography.bodyLarge,
                             modifier = Modifier.padding(bottom = 16.dp)
                         )
@@ -300,7 +310,7 @@ fun LoginScreen(
                                 } else {
                                     // Quick login doesn't need OTP
                                     viewModel.quickLogin(activity) { 
-                                        onLoginSuccess(lastLoggedInEmail)
+                                        onLoginSuccess(viewModel.email)
                                     }
                                 }
                             },
