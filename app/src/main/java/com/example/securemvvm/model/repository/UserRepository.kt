@@ -70,7 +70,7 @@ class UserRepository @Inject constructor(
                 } else {
                     Log.d(TAG, "No user found with email: $email")
                     checkUserCursor.close()
-                    return@withContext Result.failure(Exception("Invalid email or password"))
+                    return@withContext Result.failure(InvalidCredentialsException("Invalid email or password"))
                 }
 
                 val cursor = database.rawQuery(
@@ -83,9 +83,26 @@ class UserRepository @Inject constructor(
                 )
                 
                 if (cursor.moveToFirst()) {
-                    val userId = cursor.getString(cursor.getColumnIndexOrThrow("id"))
-                    val userEmail = cursor.getString(cursor.getColumnIndexOrThrow("email"))
+                    // Safely get column indices
+                    val idColumnIndex = cursor.getColumnIndex("id")
+                    val emailColumnIndex = cursor.getColumnIndex("email")
+                    
+                    // Check if columns exist
+                    if (idColumnIndex == -1 || emailColumnIndex == -1) {
+                        cursor.close()
+                        Log.e(TAG, "Required columns not found in users table")
+                        return@withContext Result.failure(Exception("Database schema error"))
+                    }
+                    
+                    val userId = cursor.getString(idColumnIndex)
+                    val userEmail = cursor.getString(emailColumnIndex)
                     cursor.close()
+                    
+                    // Validate user ID
+                    if (userId.isNullOrEmpty()) {
+                        Log.e(TAG, "User ID is null or empty for email: $email")
+                        return@withContext Result.failure(Exception("Invalid user data"))
+                    }
                     
                     // Generate auth token
                     val authToken = UUID.randomUUID().toString()
@@ -128,21 +145,77 @@ class UserRepository @Inject constructor(
 
     suspend fun registerUser(email: String, password: String): Result<Boolean> = withContext(Dispatchers.IO) {
         try {
-            val passwordHash = hashPassword(password)
-            val db = databaseManager.getWritableEncryptedDatabase()
-
+            // First check if user already exists
+            val db = databaseManager.getReadableEncryptedDatabase()
+            var userExists = false
+            
             db.use { database ->
+                val cursor = database.rawQuery(
+                    "SELECT COUNT(*) FROM users WHERE email = ?",
+                    arrayOf(email)
+                )
+                cursor.use {
+                    it.moveToFirst()
+                    userExists = it.getInt(0) > 0
+                }
+            }
+            
+            if (userExists) {
+                Log.w(TAG, "User with email $email already exists")
+                return@withContext Result.failure(IllegalArgumentException("An account with this email already exists"))
+            }
+            
+            val passwordHash = hashPassword(password)
+            val writeDb = databaseManager.getWritableEncryptedDatabase()
+
+            writeDb.use { database ->
+                // Generate a unique ID for the user
+                val userId = UUID.randomUUID().toString()
+                
+                // Log the values being inserted for debugging
+                Log.d(TAG, "Registering new user - Email: $email, ID: $userId")
+                
                 val contentValues = ContentValues().apply {
+                    put("id", userId)
                     put("email", email)
                     put("password_hash", passwordHash)
                     put("created_at", System.currentTimeMillis())
                     put("updated_at", System.currentTimeMillis())
                 }
+                
+                // Verify the table structure before inserting
+                val tableInfo = database.rawQuery("PRAGMA table_info(users)", null)
+                val columnNames = mutableListOf<String>()
+                while (tableInfo.moveToNext()) {
+                    val columnName = tableInfo.getString(tableInfo.getColumnIndex("name"))
+                    columnNames.add(columnName)
+                }
+                tableInfo.close()
+                
+                Log.d(TAG, "Users table columns: $columnNames")
+                
                 val result = database.insert("users", null, contentValues)
                 if (result == -1L) {
                     Log.e(TAG, "Failed to insert new user into database")
-                    return@withContext Result.failure(Exception("Failed to register user"))
+                    return@withContext Result.failure(Exception("Unable to create account. Please try again later"))
                 }
+                
+                // Verify the user was inserted correctly
+                val verifyUserCursor = database.rawQuery(
+                    "SELECT id, email FROM users WHERE email = ?",
+                    arrayOf(email)
+                )
+                
+                if (verifyUserCursor.moveToFirst()) {
+                    val verifyId = verifyUserCursor.getString(verifyUserCursor.getColumnIndex("id"))
+                    Log.d(TAG, "Successfully registered user with email: $email, ID: $verifyId")
+                    verifyUserCursor.close()
+                } else {
+                    Log.e(TAG, "User verification failed after registration")
+                    verifyUserCursor.close()
+                    return@withContext Result.failure(Exception("Account created but verification failed"))
+                }
+                
                 return@withContext Result.success(true)
             }
         } catch (e: Exception) {

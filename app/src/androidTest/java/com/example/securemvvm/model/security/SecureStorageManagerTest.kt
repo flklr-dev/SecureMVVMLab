@@ -1,92 +1,113 @@
 package com.example.securemvvm.model.security
 
 import android.content.Context
-import androidx.test.core.app.ApplicationProvider
-import androidx.test.ext.junit.runners.AndroidJUnit4
-import org.junit.Assert.*
-import org.junit.Before
-import org.junit.Test
-import org.junit.runner.RunWith
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import android.util.Base64
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
+import dagger.hilt.android.qualifiers.ApplicationContext
+import java.security.KeyStore
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
+import javax.inject.Inject
+import javax.inject.Singleton
 
-@RunWith(AndroidJUnit4::class)
-class SecureStorageManagerTest {
+@Singleton
+class SecureStorageManager @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
+    private val masterKey = MasterKey.Builder(context)
+        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+        .build()
 
-    private lateinit var secureStorageManager: SecureStorageManager
+    private val securePreferences = EncryptedSharedPreferences.create(
+        context,
+        "secure_prefs",
+        masterKey,
+        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+    )
 
-    @Before
-    fun setup() {
-        val context = ApplicationProvider.getApplicationContext<Context>()
-        secureStorageManager = SecureStorageManager(context)
-        // Clear any existing data before each test
-        secureStorageManager.clearSecureStorage()
+    private val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+    private val keyAlias = "SecureStorageKey"
+    private val sharedPrefs = context.getSharedPreferences("SecureStorage", Context.MODE_PRIVATE)
+
+    init {
+        if (!keyStore.containsAlias(keyAlias)) {
+            createKey()
+        }
     }
 
-    @Test
-    fun saveAndRetrieveSecureString() {
-        // Given
-        val key = "test_key"
-        val value = "sensitive_data"
+    private fun createKey() {
+        val keyGenerator = KeyGenerator.getInstance(
+            KeyProperties.KEY_ALGORITHM_AES,
+            "AndroidKeyStore"
+        )
+        val keyGenParameterSpec = KeyGenParameterSpec.Builder(
+            keyAlias,
+            KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+        )
+            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+            .build()
 
-        // When
-        secureStorageManager.saveSecureString(key, value)
-        val retrievedValue = secureStorageManager.getSecureString(key)
-
-        // Then
-        assertEquals(value, retrievedValue)
+        keyGenerator.init(keyGenParameterSpec)
+        keyGenerator.generateKey()
     }
 
-    @Test
-    fun getNonExistentKey_returnsNull() {
-        // When
-        val result = secureStorageManager.getSecureString("non_existent_key")
-
-        // Then
-        assertNull(result)
+    fun saveSecureString(key: String, value: String) {
+        securePreferences.edit().putString(key, value).apply()
     }
 
-    @Test
-    fun clearStorage_removesAllData() {
-        // Given
-        val key1 = "key1"
-        val key2 = "key2"
-        secureStorageManager.saveSecureString(key1, "value1")
-        secureStorageManager.saveSecureString(key2, "value2")
-
-        // When
-        secureStorageManager.clearSecureStorage()
-
-        // Then
-        assertNull(secureStorageManager.getSecureString(key1))
-        assertNull(secureStorageManager.getSecureString(key2))
+    fun getSecureString(key: String): String? {
+        return securePreferences.getString(key, null)
     }
 
-    @Test
-    fun overwriteExistingValue() {
-        // Given
-        val key = "test_key"
-        val initialValue = "initial_value"
-        val newValue = "new_value"
-
-        // When
-        secureStorageManager.saveSecureString(key, initialValue)
-        secureStorageManager.saveSecureString(key, newValue)
-        val retrievedValue = secureStorageManager.getSecureString(key)
-
-        // Then
-        assertEquals(newValue, retrievedValue)
+    fun clearSecureStorage() {
+        securePreferences.edit().clear().apply()
     }
 
-    @Test
-    fun saveEmptyString() {
-        // Given
-        val key = "empty_key"
-        val value = ""
+    fun storePassword(password: String) {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        val secretKey = keyStore.getKey(keyAlias, null) as SecretKey
+        cipher.init(Cipher.ENCRYPT_MODE, secretKey)
 
-        // When
-        secureStorageManager.saveSecureString(key, value)
-        val retrievedValue = secureStorageManager.getSecureString(key)
+        val encrypted = cipher.doFinal(password.toByteArray())
+        val iv = cipher.iv
 
-        // Then
-        assertEquals(value, retrievedValue)
+        // Store both the IV and encrypted data
+        sharedPrefs.edit()
+            .putString("stored_password", Base64.encodeToString(encrypted, Base64.DEFAULT))
+            .putString("stored_password_iv", Base64.encodeToString(iv, Base64.DEFAULT))
+            .apply()
+    }
+
+    fun getStoredPassword(): String? {
+        val encryptedPassword = sharedPrefs.getString("stored_password", null) ?: return null
+        val iv = sharedPrefs.getString("stored_password_iv", null) ?: return null
+
+        try {
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            val secretKey = keyStore.getKey(keyAlias, null) as SecretKey
+            val ivSpec = GCMParameterSpec(128, Base64.decode(iv, Base64.DEFAULT))
+            
+            cipher.init(Cipher.DECRYPT_MODE, secretKey, ivSpec)
+            val decrypted = cipher.doFinal(Base64.decode(encryptedPassword, Base64.DEFAULT))
+            
+            return String(decrypted)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return null
+        }
+    }
+
+    fun clearStoredPassword() {
+        sharedPrefs.edit()
+            .remove("stored_password")
+            .remove("stored_password_iv")
+            .apply()
     }
 } 

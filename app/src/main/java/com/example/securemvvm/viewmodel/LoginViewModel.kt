@@ -31,9 +31,8 @@ class LoginViewModel @Inject constructor(
     private val biometricHelper: BiometricHelper,
     private val secureStorageManager: SecureStorageManager
 ) : ViewModel() {
-    private val _email = mutableStateOf(userPreferencesRepository.getLastLoggedInEmail() ?: "")
-    val email: String
-        get() = _email.value
+    private val _email = MutableStateFlow("")
+    val email: String get() = _email.value
     
     private val _password = mutableStateOf("")
     val password: String
@@ -53,8 +52,8 @@ class LoginViewModel @Inject constructor(
     val hasBiometricBeenPrompted: Boolean
         get() = _hasBiometricBeenPrompted
 
-    fun updateEmail(value: String) {
-        _email.value = value.trim()
+    fun updateEmail(newEmail: String) {
+        _email.value = newEmail
     }
 
     fun updatePassword(value: String) {
@@ -228,7 +227,6 @@ class LoginViewModel @Inject constructor(
     }
 
     fun clearStoredCredentials() {
-        secureStorageManager.clearStoredPassword()
         userPreferencesRepository.clearUserPreferences()
         _email.value = ""
         _password.value = ""

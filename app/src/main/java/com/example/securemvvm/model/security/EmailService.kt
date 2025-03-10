@@ -19,7 +19,7 @@ class EmailService @Inject constructor(
         private const val SMTP_HOST = "smtp.gmail.com"
         private const val SMTP_PORT = "587"
         private const val EMAIL_FROM = "kitadriand@gmail.com" // Replace with your Gmail
-        private const val EMAIL_PASSWORD = "sugl llqs dkdo pfhl" // Replace with your app password
+        private const val EMAIL_PASSWORD = "etth sqhl ydcu bvvz" // Replace with your app password
     }
 
     suspend fun sendOTPEmail(recipientEmail: String, otp: String) = withContext(Dispatchers.IO) {
@@ -41,7 +41,7 @@ class EmailService @Inject constructor(
                 setFrom(InternetAddress(EMAIL_FROM))
                 addRecipient(Message.RecipientType.TO, InternetAddress(recipientEmail))
                 subject = "Your Login OTP Code"
-                setText("Your verification code is: $otp\nThis code will expire in 5 minutes.")
+                setText("Your verification code is: $otp\nThis code will expire in 2 minutes.")
             }
 
             Transport.send(message)

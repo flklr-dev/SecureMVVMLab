@@ -65,6 +65,9 @@ fun LoginScreen(
     val lastLoggedInEmail = viewModel.email
     val hasStoredCredentials = viewModel.hasStoredCredentials()
 
+    // Add local state for email
+    var emailInput by remember { mutableStateOf("") }
+    
     // Modified LaunchedEffect for biometric login
     LaunchedEffect(key1 = Unit) {
         if (hasStoredCredentials && !showFullLoginForm && !BiometricState.hasPromptedThisSession) {
@@ -79,6 +82,29 @@ fun LoginScreen(
                 },
                 onError = { /* Silently fail, let user use password */ }
             )
+        }
+    }
+
+    // Update email in ViewModel when local state changes
+    LaunchedEffect(emailInput) {
+        viewModel.updateEmail(emailInput)
+    }
+
+    // Clear email when showing full login form
+    LaunchedEffect(showFullLoginForm) {
+        if (showFullLoginForm) {
+            emailInput = ""
+            viewModel.updateEmail("")
+        }
+    }
+
+    // Clear stored credentials when navigating away
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.clearStoredCredentials()
+            emailInput = ""
+            viewModel.updateEmail("")
+            viewModel.updatePassword("")
         }
     }
 
@@ -100,17 +126,17 @@ fun LoginScreen(
             )
             if (!hasStoredCredentials || showFullLoginForm) {
                 OutlinedTextField(
-                    value = if (showFullLoginForm) "" else viewModel.email,
+                    value = emailInput,
                     onValueChange = { newValue -> 
-                        viewModel.updateEmail(newValue)
+                        emailInput = newValue
                         emailError = null 
                     },
                     label = { Text("Email") },
                     modifier = Modifier
                         .fillMaxWidth()
                         .onFocusEvent { focusState ->
-                            if (!focusState.isFocused && viewModel.email.isNotBlank()) {
-                                if (!isValidEmail(viewModel.email)) {
+                            if (!focusState.isFocused && emailInput.isNotBlank()) {
+                                if (!isValidEmail(emailInput)) {
                                     emailError = "Please enter a valid email address"
                                 }
                             }
@@ -122,7 +148,8 @@ fun LoginScreen(
                     ),
                     supportingText = if (emailError != null) {
                         { Text(text = emailError!!, color = MaterialTheme.colorScheme.error) }
-                    } else null
+                    } else null,
+                    enabled = true
                 )
 
                 OutlinedTextField(
@@ -163,10 +190,10 @@ fun LoginScreen(
                     onClick = { 
                         var hasError = false
                         
-                        if (viewModel.email.isBlank()) {
+                        if (emailInput.isBlank()) {
                             emailError = "Email is required"
                             hasError = true
-                        } else if (!isValidEmail(viewModel.email)) {
+                        } else if (!isValidEmail(emailInput)) {
                             emailError = "Please enter a valid email address"
                             hasError = true
                         }
@@ -177,7 +204,7 @@ fun LoginScreen(
                         }
                         
                         if (!hasError) {
-                            viewModel.login(activity) { onLoginSuccess(viewModel.email) }
+                            viewModel.login(activity) { onLoginSuccess(emailInput) }
                         }
                     },
                     modifier = Modifier
@@ -337,7 +364,7 @@ fun LoginScreen(
                 showSuccessDialog = true
                 delay(1000)
                 showSuccessDialog = false
-                onLoginSuccess(viewModel.email)
+                onLoginSuccess(emailInput)
             }
             is LoginState.Error -> {
                 errorMessage = (loginState as LoginState.Error).message
@@ -372,7 +399,7 @@ fun LoginScreen(
         AlertDialog(
             onDismissRequest = { 
                 showSuccessDialog = false
-                onLoginSuccess(viewModel.email)
+                onLoginSuccess(emailInput)
             },
             icon = {
                 Icon(
@@ -387,7 +414,7 @@ fun LoginScreen(
                 TextButton(
                     onClick = { 
                         showSuccessDialog = false
-                        onLoginSuccess(viewModel.email)
+                        onLoginSuccess(emailInput)
                     }
                 ) {
                     Text("OK")
